@@ -1,0 +1,43 @@
+{
+  "enclave": "bd1e367b53484668ab0d1c45c498211d",
+  "C0": {
+    "block_root": "0x4ec068e742b7f0c9e0c49f0148455edea1bbd8fcb9e8babb60da055bdb43904e",
+    "execution_block_number": 64,
+    "finalized": true,
+    "finalized_epoch": 2,
+    "observed_at": "2026-09-21T20:27:47Z",
+    "parent_root": "0x1e66d503bbf49c896d1783730917798e3e2428e4cbc53e18b5377b3033fe0d15",
+    "slot": 64,
+    "state_root": "0xd53ef35375a5227ae8669f38ca841391a62877af819146f6a28510698c8dfcfe",
+    "version": "fulu"
+  },
+  "pre_version": "fulu",
+  "post_version": "gloas",
+  "post_finalized_slot": "192",
+  "files": [
+    {
+      "path": "anchor.txt",
+      "sha256": "28ac73c72cf9d597561b631f9953504bca12a417b7a2b3b29965fe35cbfad6d7"
+    },
+    {
+      "path": "bootstrap.json",
+      "sha256": "3ac942ee0376f44305892a8a6373f6f4e0a530275c66c641b7a3015a06eadc8a"
+    },
+    {
+      "path": "config.json",
+      "sha256": "8af0337f5ec54b16b5ed6f38c353cc3d4856448b3266d00addaafb9d718000c2"
+    },
+    {
+      "path": "genesis.json",
+      "sha256": "9fc3003b34e6a5dcf5bccfe00c4c85fbfa3f18f4db72e2b530576865714bef0c"
+    },
+    {
+      "path": "post-finality.json",
+      "sha256": "c20491e8560920f4fd36469d66fa82f8f2a3b4fd55c145dc1967f838ee4b2667"
+    },
+    {
+      "path": "pre-finality.json",
+      "sha256": "c63ae5befcba3ec46c442ffe9e2e34d598b3decb8d0083b1931b1a689b7e1814"
+    }
+  ]
+}

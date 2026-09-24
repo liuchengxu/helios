@@ -187,5 +187,9 @@ fn get_forks(with_electra: bool) -> Forks {
             epoch: u64::MAX,
             fork_version: fixed_bytes!("06000001"),
         },
+        gloas: Fork {
+            epoch: u64::MAX,
+            fork_version: fixed_bytes!("07000001"),
+        },
     }
 }

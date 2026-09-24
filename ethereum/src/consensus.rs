@@ -26,7 +26,7 @@ use helios_consensus_core::{
     consensus_spec::ConsensusSpec,
     errors::ConsensusError,
     expected_current_slot, get_bits,
-    types::{ExecutionPayload, FinalityUpdate, LightClientStore, Update},
+    types::{ExecutionPayload, FinalityUpdate, LightClientHeader, LightClientStore, Update},
     verify_bootstrap, verify_finality_update, verify_update,
 };
 use helios_core::consensus::Consensus;
@@ -477,12 +477,7 @@ impl<S: ConsensusSpec, R: ConsensusRpc<S>> Inner<S, R> {
         let slot = self.store.optimistic_header.beacon().slot;
         let slot = Some(slot);
 
-        let latest_fin_hash = self
-            .store
-            .finalized_header
-            .execution()
-            .ok()
-            .map(|h| *h.block_hash());
+        let latest_fin_hash = committed_execution_block_hash(&self.store.finalized_header);
         let last_sent_fin_hash = self
             .finalized_block_send
             .borrow()
@@ -673,6 +668,19 @@ impl<S: ConsensusSpec, R: ConsensusRpc<S>> Inner<S, R> {
 
         slot_age < self.config.max_checkpoint_age
     }
+}
+
+/// The execution block hash a light client header commits to; `None` when the header
+/// carries no execution data at all (pre-Capella).
+///
+/// Gloas:EIP7732 headers carry the last executed execution block hash directly, while
+/// earlier headers carry the execution payload header.
+fn committed_execution_block_hash(header: &LightClientHeader) -> Option<B256> {
+    header
+        .execution()
+        .ok()
+        .map(|execution| *execution.block_hash())
+        .or_else(|| header.execution_block_hash().ok().copied())
 }
 
 fn payload_to_block<S: ConsensusSpec>(value: ExecutionPayload<S>) -> Block<Transaction> {

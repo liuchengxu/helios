@@ -417,12 +417,13 @@ pub struct ConsolidationRequest {
 }
 
 #[superstruct(
-    variants(Base, Electra),
+    variants(Base, Electra, Gloas),
     variant_attributes(
-        derive(Deserialize, Debug, Decode),
+        derive(Deserialize, Debug),
         serde(deny_unknown_fields),
         serde(bound = "S: ConsensusSpec"),
-    )
+    ),
+    specific_variant_attributes(Base(derive(Decode)), Electra(derive(Decode)))
 )]
 #[derive(Deserialize, Debug, Decode)]
 #[serde(untagged)]
@@ -441,6 +442,11 @@ pub struct Bootstrap<S: ConsensusSpec> {
         partial_getter(rename = "current_sync_committee_branch_electra")
     )]
     pub current_sync_committee_branch: FixedVector<B256, typenum::U6>,
+    #[superstruct(
+        only(Gloas),
+        partial_getter(rename = "current_sync_committee_branch_gloas")
+    )]
+    pub current_sync_committee_branch: FixedVector<B256, typenum::U11>,
 }
 
 impl<S: ConsensusSpec> Bootstrap<S> {
@@ -448,17 +454,19 @@ impl<S: ConsensusSpec> Bootstrap<S> {
         match self {
             Bootstrap::Base(inner) => &inner.current_sync_committee_branch,
             Bootstrap::Electra(inner) => &inner.current_sync_committee_branch,
+            Bootstrap::Gloas(inner) => &inner.current_sync_committee_branch,
         }
     }
 }
 
 #[superstruct(
-    variants(Base, Electra),
+    variants(Base, Electra, Gloas),
     variant_attributes(
-        derive(Serialize, Deserialize, Debug, Clone, Decode,),
+        derive(Serialize, Deserialize, Debug, Clone),
         serde(deny_unknown_fields),
         serde(bound = "S: ConsensusSpec"),
-    )
+    ),
+    specific_variant_attributes(Base(derive(Decode)), Electra(derive(Decode)))
 )]
 #[derive(Serialize, Deserialize, Debug, Clone, Decode)]
 #[serde(untagged)]
@@ -474,11 +482,18 @@ pub struct Update<S: ConsensusSpec> {
         partial_getter(rename = "next_sync_committee_branch_electra")
     )]
     pub next_sync_committee_branch: FixedVector<B256, typenum::U6>,
+    #[superstruct(
+        only(Gloas),
+        partial_getter(rename = "next_sync_committee_branch_gloas")
+    )]
+    pub next_sync_committee_branch: FixedVector<B256, typenum::U11>,
     pub finalized_header: LightClientHeader,
     #[superstruct(only(Base), partial_getter(rename = "finality_branch_base"))]
     pub finality_branch: FixedVector<B256, typenum::U6>,
     #[superstruct(only(Electra), partial_getter(rename = "finality_branch_electra"))]
     pub finality_branch: FixedVector<B256, typenum::U7>,
+    #[superstruct(only(Gloas), partial_getter(rename = "finality_branch_gloas"))]
+    pub finality_branch: FixedVector<B256, typenum::U9>,
     pub sync_aggregate: SyncAggregate<S>,
     #[serde(with = "serde_utils::u64")]
     pub signature_slot: u64,
@@ -489,6 +504,7 @@ impl<S: ConsensusSpec> Update<S> {
         match self {
             Update::Base(inner) => &inner.next_sync_committee_branch,
             Update::Electra(inner) => &inner.next_sync_committee_branch,
+            Update::Gloas(inner) => &inner.next_sync_committee_branch,
         }
     }
 
@@ -496,17 +512,19 @@ impl<S: ConsensusSpec> Update<S> {
         match self {
             Update::Base(inner) => &inner.finality_branch,
             Update::Electra(inner) => &inner.finality_branch,
+            Update::Gloas(inner) => &inner.finality_branch,
         }
     }
 }
 
 #[superstruct(
-    variants(Base, Electra),
+    variants(Base, Electra, Gloas),
     variant_attributes(
-        derive(Serialize, Deserialize, Debug, Clone, Decode,),
+        derive(Serialize, Deserialize, Debug, Clone),
         serde(deny_unknown_fields),
         serde(bound = "S: ConsensusSpec"),
-    )
+    ),
+    specific_variant_attributes(Base(derive(Decode)), Electra(derive(Decode)))
 )]
 #[derive(Serialize, Deserialize, Debug, Clone, Decode)]
 #[serde(untagged)]
@@ -519,6 +537,8 @@ pub struct FinalityUpdate<S: ConsensusSpec> {
     pub finality_branch: FixedVector<B256, typenum::U6>,
     #[superstruct(only(Electra), partial_getter(rename = "finality_branch_electra"))]
     pub finality_branch: FixedVector<B256, typenum::U7>,
+    #[superstruct(only(Gloas), partial_getter(rename = "finality_branch_gloas"))]
+    pub finality_branch: FixedVector<B256, typenum::U9>,
     pub sync_aggregate: SyncAggregate<S>,
     #[serde(with = "serde_utils::u64")]
     pub signature_slot: u64,
@@ -529,11 +549,12 @@ impl<S: ConsensusSpec> FinalityUpdate<S> {
         match self {
             FinalityUpdate::Base(inner) => &inner.finality_branch,
             FinalityUpdate::Electra(inner) => &inner.finality_branch,
+            FinalityUpdate::Gloas(inner) => &inner.finality_branch,
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Decode)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(bound = "S: ConsensusSpec")]
 pub struct OptimisticUpdate<S: ConsensusSpec> {
     pub attested_header: LightClientHeader,
@@ -542,8 +563,144 @@ pub struct OptimisticUpdate<S: ConsensusSpec> {
     pub signature_slot: u64,
 }
 
+// The Gloas light client header is a fixed-size SSZ container that the enclosing
+// containers inline. The shared `LightClientHeader` enum is variable-size, so the Gloas
+// containers decode through these layouts, which hold the concrete Gloas header.
+
+#[derive(Decode)]
+struct BootstrapGloasSsz<S: ConsensusSpec> {
+    header: LightClientHeaderGloas,
+    current_sync_committee: SyncCommittee<S>,
+    current_sync_committee_branch: FixedVector<B256, typenum::U11>,
+}
+
+#[derive(Decode)]
+struct UpdateGloasSsz<S: ConsensusSpec> {
+    attested_header: LightClientHeaderGloas,
+    next_sync_committee: SyncCommittee<S>,
+    next_sync_committee_branch: FixedVector<B256, typenum::U11>,
+    finalized_header: LightClientHeaderGloas,
+    finality_branch: FixedVector<B256, typenum::U9>,
+    sync_aggregate: SyncAggregate<S>,
+    signature_slot: u64,
+}
+
+#[derive(Decode)]
+struct FinalityUpdateGloasSsz<S: ConsensusSpec> {
+    attested_header: LightClientHeaderGloas,
+    finalized_header: LightClientHeaderGloas,
+    finality_branch: FixedVector<B256, typenum::U9>,
+    sync_aggregate: SyncAggregate<S>,
+    signature_slot: u64,
+}
+
+#[derive(Decode)]
+struct OptimisticUpdateSsz<S: ConsensusSpec> {
+    attested_header: LightClientHeader,
+    sync_aggregate: SyncAggregate<S>,
+    signature_slot: u64,
+}
+
+#[derive(Decode)]
+struct OptimisticUpdateGloasSsz<S: ConsensusSpec> {
+    attested_header: LightClientHeaderGloas,
+    sync_aggregate: SyncAggregate<S>,
+    signature_slot: u64,
+}
+
+impl<S: ConsensusSpec> ssz::Decode for BootstrapGloas<S> {
+    fn is_ssz_fixed_len() -> bool {
+        <BootstrapGloasSsz<S> as ssz::Decode>::is_ssz_fixed_len()
+    }
+
+    fn ssz_fixed_len() -> usize {
+        <BootstrapGloasSsz<S> as ssz::Decode>::ssz_fixed_len()
+    }
+
+    fn from_ssz_bytes(bytes: &[u8]) -> Result<Self, ssz::DecodeError> {
+        let layout = <BootstrapGloasSsz<S> as ssz::Decode>::from_ssz_bytes(bytes)?;
+        Ok(Self {
+            header: LightClientHeader::Gloas(layout.header),
+            current_sync_committee: layout.current_sync_committee,
+            current_sync_committee_branch: layout.current_sync_committee_branch,
+        })
+    }
+}
+
+impl<S: ConsensusSpec> ssz::Decode for UpdateGloas<S> {
+    fn is_ssz_fixed_len() -> bool {
+        <UpdateGloasSsz<S> as ssz::Decode>::is_ssz_fixed_len()
+    }
+
+    fn ssz_fixed_len() -> usize {
+        <UpdateGloasSsz<S> as ssz::Decode>::ssz_fixed_len()
+    }
+
+    fn from_ssz_bytes(bytes: &[u8]) -> Result<Self, ssz::DecodeError> {
+        let layout = <UpdateGloasSsz<S> as ssz::Decode>::from_ssz_bytes(bytes)?;
+        Ok(Self {
+            attested_header: LightClientHeader::Gloas(layout.attested_header),
+            next_sync_committee: layout.next_sync_committee,
+            next_sync_committee_branch: layout.next_sync_committee_branch,
+            finalized_header: LightClientHeader::Gloas(layout.finalized_header),
+            finality_branch: layout.finality_branch,
+            sync_aggregate: layout.sync_aggregate,
+            signature_slot: layout.signature_slot,
+        })
+    }
+}
+
+impl<S: ConsensusSpec> ssz::Decode for FinalityUpdateGloas<S> {
+    fn is_ssz_fixed_len() -> bool {
+        <FinalityUpdateGloasSsz<S> as ssz::Decode>::is_ssz_fixed_len()
+    }
+
+    fn ssz_fixed_len() -> usize {
+        <FinalityUpdateGloasSsz<S> as ssz::Decode>::ssz_fixed_len()
+    }
+
+    fn from_ssz_bytes(bytes: &[u8]) -> Result<Self, ssz::DecodeError> {
+        let layout = <FinalityUpdateGloasSsz<S> as ssz::Decode>::from_ssz_bytes(bytes)?;
+        Ok(Self {
+            attested_header: LightClientHeader::Gloas(layout.attested_header),
+            finalized_header: LightClientHeader::Gloas(layout.finalized_header),
+            finality_branch: layout.finality_branch,
+            sync_aggregate: layout.sync_aggregate,
+            signature_slot: layout.signature_slot,
+        })
+    }
+}
+
+impl<S: ConsensusSpec> ssz::Decode for OptimisticUpdate<S> {
+    fn is_ssz_fixed_len() -> bool {
+        false
+    }
+
+    /// The Gloas layout is selected by its exact fixed length. A pre-Gloas layout cannot
+    /// have that length: in place of the 496-byte Gloas header it holds a 4-byte offset
+    /// plus either the 112-byte beacon-only header or a header that carries a full
+    /// execution payload header (at least 780 bytes).
+    fn from_ssz_bytes(bytes: &[u8]) -> Result<Self, ssz::DecodeError> {
+        if bytes.len() == <OptimisticUpdateGloasSsz<S> as ssz::Decode>::ssz_fixed_len() {
+            let layout = <OptimisticUpdateGloasSsz<S> as ssz::Decode>::from_ssz_bytes(bytes)?;
+            return Ok(Self {
+                attested_header: LightClientHeader::Gloas(layout.attested_header),
+                sync_aggregate: layout.sync_aggregate,
+                signature_slot: layout.signature_slot,
+            });
+        }
+
+        let layout = <OptimisticUpdateSsz<S> as ssz::Decode>::from_ssz_bytes(bytes)?;
+        Ok(Self {
+            attested_header: layout.attested_header,
+            sync_aggregate: layout.sync_aggregate,
+            signature_slot: layout.signature_slot,
+        })
+    }
+}
+
 #[superstruct(
-    variants(Bellatrix, Capella, Deneb, Electra),
+    variants(Bellatrix, Capella, Deneb, Electra, Gloas),
     variant_attributes(
         derive(Default, Debug, Clone, Serialize, Deserialize, Decode, PartialEq),
         serde(deny_unknown_fields),
@@ -558,6 +715,12 @@ pub struct LightClientHeader {
     pub execution: ExecutionPayloadHeader,
     #[superstruct(only(Capella, Deneb, Electra))]
     pub execution_branch: FixedVector<B256, typenum::U4>,
+    /// Gloas:EIP7732 drops `execution` and carries the last executed execution block
+    /// hash, proven into `BeaconBlockBody` at `EXECUTION_BLOCK_HASH_GINDEX_GLOAS`.
+    #[superstruct(only(Gloas))]
+    pub execution_block_hash: B256,
+    #[superstruct(only(Gloas), partial_getter(rename = "execution_branch_gloas"))]
+    pub execution_branch: FixedVector<B256, typenum::U11>,
 }
 
 impl Default for LightClientHeader {
@@ -578,7 +741,7 @@ pub struct SyncAggregate<S: ConsensusSpec> {
     pub sync_committee_signature: Signature,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Forks {
     pub genesis: Fork,
     pub altair: Fork,
@@ -587,6 +750,32 @@ pub struct Forks {
     pub deneb: Fork,
     pub electra: Fork,
     pub fulu: Fork,
+    #[serde(default = "unscheduled_fork")]
+    pub gloas: Fork,
+}
+
+impl Default for Forks {
+    fn default() -> Self {
+        Self {
+            genesis: Fork::default(),
+            altair: Fork::default(),
+            bellatrix: Fork::default(),
+            capella: Fork::default(),
+            deneb: Fork::default(),
+            electra: Fork::default(),
+            fulu: Fork::default(),
+            gloas: unscheduled_fork(),
+        }
+    }
+}
+
+/// A fork that never activates. Gloas:EIP7732 stays inactive until its fork epoch is
+/// configured, including in schedules serialized before the `gloas` field existed.
+fn unscheduled_fork() -> Fork {
+    Fork {
+        epoch: u64::MAX,
+        fork_version: FixedBytes::ZERO,
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -801,5 +990,91 @@ fn default_header_to_none(value: LightClientHeader) -> Option<LightClientHeader>
                 }
             }
         },
+        LightClientHeader::Gloas(header) => {
+            let is_default = header.beacon == BeaconBlockHeader::default()
+                && header.execution_block_hash.is_zero()
+                && header.execution_branch.iter().all(B256::is_zero);
+
+            if is_default {
+                None
+            } else {
+                Some(value)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::consensus_spec::MinimalConsensusSpec;
+
+    fn gloas_header(slot: u64, execution_block_hash: B256) -> LightClientHeader {
+        LightClientHeader::Gloas(LightClientHeaderGloas {
+            beacon: BeaconBlockHeader {
+                slot,
+                ..Default::default()
+            },
+            execution_block_hash,
+            execution_branch: FixedVector::from(vec![B256::ZERO; 11]),
+        })
+    }
+
+    /// A fork schedule serialized before the `gloas` field existed still loads, with
+    /// Gloas unscheduled and every earlier fork unchanged.
+    #[test]
+    fn forks_without_gloas_deserialize_with_gloas_unscheduled() {
+        let json = r#"{
+            "genesis": {"epoch": 0, "fork_version": "0x00000001"},
+            "altair": {"epoch": 1, "fork_version": "0x01000001"},
+            "bellatrix": {"epoch": 2, "fork_version": "0x02000001"},
+            "capella": {"epoch": 3, "fork_version": "0x03000001"},
+            "deneb": {"epoch": 4, "fork_version": "0x04000001"},
+            "electra": {"epoch": 5, "fork_version": "0x05000001"},
+            "fulu": {"epoch": 6, "fork_version": "0x06000001"}
+        }"#;
+        let forks: Forks = serde_json::from_str(json).unwrap();
+
+        assert_eq!(forks.gloas.epoch, u64::MAX);
+        assert_eq!(forks.gloas.fork_version, FixedBytes::<4>::ZERO);
+        assert_eq!(forks.genesis.fork_version, FixedBytes::from([0, 0, 0, 1]));
+        assert_eq!(forks.deneb.epoch, 4);
+        assert_eq!(forks.fulu.epoch, 6);
+        assert_eq!(forks.fulu.fork_version, FixedBytes::from([6, 0, 0, 1]));
+        assert_eq!(Forks::default().gloas.epoch, u64::MAX);
+
+        // An explicit Gloas entry is kept.
+        let json = json.replace(
+            r#""fulu": {"epoch": 6, "fork_version": "0x06000001"}"#,
+            r#""fulu": {"epoch": 6, "fork_version": "0x06000001"},
+            "gloas": {"epoch": 7, "fork_version": "0x07000001"}"#,
+        );
+        let forks: Forks = serde_json::from_str(&json).unwrap();
+        assert_eq!(forks.gloas.epoch, 7);
+        assert_eq!(forks.gloas.fork_version, FixedBytes::from([7, 0, 0, 1]));
+    }
+
+    /// An upgraded pre-fork finalized header is not the empty header, so a Gloas update
+    /// must carry it (and its finality proof) instead of dropping it as absent. The
+    /// empty header and the empty sync committee stay absent.
+    #[test]
+    fn gloas_update_carries_an_upgraded_pre_fork_finalized_header() {
+        let update = Update::<MinimalConsensusSpec>::Gloas(UpdateGloas {
+            attested_header: gloas_header(40, B256::with_last_byte(0xaa)),
+            next_sync_committee: SyncCommittee::default(),
+            next_sync_committee_branch: FixedVector::from(vec![B256::ZERO; 11]),
+            // Pre-Capella upgrade shape: no executed payload committed yet.
+            finalized_header: gloas_header(24, B256::ZERO),
+            finality_branch: FixedVector::from(vec![B256::with_last_byte(1); 9]),
+            sync_aggregate: SyncAggregate::default(),
+            signature_slot: 41,
+        });
+
+        let generic = GenericUpdate::<MinimalConsensusSpec>::from(&update);
+
+        assert!(generic.finalized_header.is_some());
+        assert!(generic.finality_branch.is_some());
+        assert!(generic.next_sync_committee.is_none());
+        assert!(generic.next_sync_committee_branch.is_none());
     }
 }

@@ -22,7 +22,9 @@ pub fn calculate_fork_version<S: ConsensusSpec>(
 ) -> FixedVector<u8, typenum::U4> {
     let epoch = slot / S::slots_per_epoch();
 
-    let version = if epoch >= forks.fulu.epoch {
+    let version = if epoch >= forks.gloas.epoch {
+        forks.gloas.fork_version
+    } else if epoch >= forks.fulu.epoch {
         forks.fulu.fork_version
     } else if epoch >= forks.electra.epoch {
         forks.electra.fork_version
@@ -110,4 +112,88 @@ struct SigningData {
 struct ForkData {
     current_version: FixedVector<u8, typenum::U4>,
     genesis_validator_root: B256,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::consensus_spec::MinimalConsensusSpec;
+    use crate::types::Fork;
+    use alloy::primitives::{fixed_bytes, FixedBytes};
+
+    fn test_forks(electra_epoch: u64, fulu_epoch: u64, gloas_epoch: u64) -> Forks {
+        Forks {
+            genesis: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("00000001"),
+            },
+            altair: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("01000001"),
+            },
+            bellatrix: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("02000001"),
+            },
+            capella: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("03000001"),
+            },
+            deneb: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("04000001"),
+            },
+            electra: Fork {
+                epoch: electra_epoch,
+                fork_version: fixed_bytes!("05000001"),
+            },
+            fulu: Fork {
+                epoch: fulu_epoch,
+                fork_version: fixed_bytes!("06000001"),
+            },
+            gloas: Fork {
+                epoch: gloas_epoch,
+                fork_version: fixed_bytes!("07000001"),
+            },
+        }
+    }
+
+    fn as_version(bytes: FixedBytes<4>) -> FixedVector<u8, typenum::U4> {
+        FixedVector::from(bytes.to_vec())
+    }
+
+    fn version_at(forks: &Forks, epoch: u64) -> FixedVector<u8, typenum::U4> {
+        let slot = epoch * MinimalConsensusSpec::slots_per_epoch();
+        calculate_fork_version::<MinimalConsensusSpec>(forks, slot)
+    }
+
+    #[test]
+    fn fork_version_switches_to_gloas_at_the_fork_epoch() {
+        let forks = test_forks(2, 4, 8);
+        let fulu_version = as_version(forks.fulu.fork_version);
+        let gloas_version = as_version(forks.gloas.fork_version);
+        let last_fulu_epoch = forks.gloas.epoch - 1;
+
+        // The signature domain is Fulu on the slot before the fork.
+        assert_eq!(version_at(&forks, last_fulu_epoch), fulu_version);
+
+        // Gloas signs the first slot of its fork epoch and every later slot.
+        assert_eq!(version_at(&forks, forks.gloas.epoch), gloas_version);
+        assert_eq!(version_at(&forks, forks.gloas.epoch + 1), gloas_version);
+    }
+
+    #[test]
+    fn pre_gloas_fork_versions_are_unchanged() {
+        let forks = test_forks(2, 4, 8);
+        let deneb_version = as_version(forks.deneb.fork_version);
+        let electra_version = as_version(forks.electra.fork_version);
+        let fulu_version = as_version(forks.fulu.fork_version);
+        let last_fulu_epoch = forks.gloas.epoch - 1;
+
+        assert_eq!(version_at(&forks, 0), deneb_version);
+        assert_eq!(version_at(&forks, 1), deneb_version);
+        assert_eq!(version_at(&forks, forks.electra.epoch), electra_version);
+        assert_eq!(version_at(&forks, forks.fulu.epoch), fulu_version);
+        assert_eq!(version_at(&forks, last_fulu_epoch), fulu_version);
+    }
 }
